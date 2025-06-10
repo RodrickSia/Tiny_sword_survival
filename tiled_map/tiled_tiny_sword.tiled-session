@@ -1,0 +1,137 @@
+{
+    "activeFile": "Basic_maps.tmx",
+    "expandedProjectPaths": [
+        "."
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "": {
+            "scaleInDock": 1
+        },
+        ":/automap-tiles.tsx": {
+            "scaleInDock": 1
+        },
+        "Basic_maps.tmx": {
+            "scale": 0.5,
+            "selectedLayer": 5,
+            "viewCenter": {
+                "x": -824,
+                "y": 624
+            }
+        },
+        "Decorations.tsx": {
+            "dynamicWrapping": true,
+            "scaleInDock": 0.33,
+            "scaleInEditor": 0.5
+        },
+        "Ground.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 0.75,
+            "scaleInEditor": 1
+        },
+        "elevation.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "foam.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "foam2.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 2
+        },
+        "house.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock1.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock2.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock3.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock4.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock_2.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock_animation_1.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "rock_animation_2.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "shadow.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "sheep.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "tiny_sword.tsx": {
+            "dynamicWrapping": true,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "tree.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 0.5,
+            "scaleInEditor": 1
+        },
+        "water.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        }
+    },
+    "frame.defaultDuration": 100,
+    "last.externalTilesetPath": "D:/Final_test/Warrior survivor/tiled_map",
+    "last.imagePath": "D:/Final_test/Warrior survivor/assets/Resources/Sheep",
+    "map.lastUsedFormat": "tmx",
+    "openFiles": [
+        "Basic_maps.tmx"
+    ],
+    "project": "tiled_tiny_sword.tiled-project",
+    "recentFiles": [
+        "Basic_maps.tmx",
+        "tiny_sword.tsx",
+        "sheep.tsx",
+        "house.tsx",
+        "foam2.tsx",
+        "tree.tsx",
+        "Decorations.tsx",
+        "rock4.tsx",
+        "rock3.tsx",
+        "rock2.tsx",
+        "rock1.tsx",
+        "shadow.tsx"
+    ],
+    "tileset.lastUsedFilter": "Tiled tileset files (*.tsx *.xml)",
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.tileSize": {
+        "height": 128,
+        "width": 128
+    },
+    "tileset.type": 0
+}
