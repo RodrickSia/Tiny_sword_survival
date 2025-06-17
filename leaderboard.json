@@ -1,0 +1,47 @@
+{
+  "scores": [
+    {
+      "waves_survived": 5,
+      "enemies_killed": 47,
+      "total_score": 970,
+      "date": "2025-06-17 16:20",
+      "rank": 1
+    },
+    {
+      "waves_survived": 3,
+      "enemies_killed": 21,
+      "total_score": 510,
+      "date": "2025-06-17 16:16",
+      "rank": 2
+    },
+    {
+      "waves_survived": 2,
+      "enemies_killed": 14,
+      "total_score": 340,
+      "date": "2025-06-17 16:07",
+      "rank": 3
+    },
+    {
+      "waves_survived": 2,
+      "enemies_killed": 14,
+      "total_score": 340,
+      "date": "2025-06-17 16:07",
+      "rank": 4
+    },
+    {
+      "waves_survived": 2,
+      "enemies_killed": 13,
+      "total_score": 330,
+      "date": "2025-06-17 16:15",
+      "rank": 5
+    },
+    {
+      "waves_survived": 2,
+      "enemies_killed": 12,
+      "total_score": 320,
+      "date": "2025-06-17 16:13",
+      "rank": 6
+    }
+  ],
+  "last_updated": "2025-06-17T16:20:19.758909"
+}
