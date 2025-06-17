@@ -443,169 +443,165 @@ class InputHandler:
         return current_direction, last_direction, last_horizontal_direction
 
 class CombatSystem:
-    def __init__(self, config: Dict):
+    def __init__(self, config):
         self.config = config
-        
-        # Combat state
         self.is_attacking = False
-        self.attack_timer = 0
-        self.attack_cooldown_timer = 0
         self.attack_combo = 0
-        self.combo_timer = 0
+        self.attack_duration_timer = 0
+        self.attack_cooldown_timer = 0
+        self.combo_window_timer = 0
         self.combo_end_cooldown_timer = 0
-        self.combo_completed = False
-        
-        # Attack push state
-        self.is_attack_pushing = False
-        self.attack_push_timer = 0
-        self.attack_direction_x = 0
-        self.attack_direction_y = 0
-        
-        # Recovery state
-        self.is_in_recovery = False
         self.attack_recovery_timer = 0
+        self.is_in_recovery = False
         
-        # NEW: Attack queuing system
-        self.attack_queued = False
-        self.queue_timer = 0
-        self.queue_window = 0.2  # 200ms window to queue next attack
+        # Attack push movement
+        self.attack_push_x = 0
+        self.attack_push_y = 0
+        self.attack_push_timer = 0
+        
+        # Player reference for dynamic stats
+        self.player_ref = None
+        
+    def set_player_ref(self, player):
+        """Set reference to player for dynamic stats"""
+        self.player_ref = player
 
-    def can_attack(self) -> bool:
-        """Check if entity can attack immediately"""
-        return (self.attack_cooldown_timer <= 0 and 
-                self.combo_end_cooldown_timer <= 0 and 
-                not self.is_attacking and
-                not self.is_in_recovery)
-
-    def can_queue_attack(self) -> bool:
-        """Check if attack can be queued for combo"""
-        return (self.is_attacking and 
-                self.combo_timer > 0 and 
-                self.attack_combo < self.config['max_combo'] - 1 and
-                not self.attack_queued)
-
-    def try_attack(self, direction: str):
-        """Try to attack or queue an attack"""
-        if self.can_attack():
-            # Can attack immediately
+    def try_attack(self, direction):
+        """Try to start an attack"""
+        if self.attack_cooldown_timer <= 0 and not self.is_attacking and not self.is_in_recovery:
             self.start_attack(direction)
-        elif self.can_queue_attack():
-            # Queue the attack for combo
-            self.attack_queued = True
-            self.queue_timer = self.queue_window
-            self.queued_direction = direction
+        elif self.combo_window_timer > 0 and self.attack_combo < self.config['max_combo']:
+            # Continue combo
+            self.continue_combo(direction)
 
-    def start_attack(self, direction: str):
-        """Start attack with combo system"""
-        # Reset states
-        self.combo_end_cooldown_timer = 0
-        self.combo_completed = False
-        self.is_in_recovery = False
-        self.attack_recovery_timer = 0
-        self.attack_queued = False  # Clear any queued attack
-        
-        # Handle combo logic
-        if self.combo_timer > 0 and self.attack_combo < self.config['max_combo'] - 1:
-            self.attack_combo += 1
-        else:
-            self.attack_combo = 0
-        
-        # Set attack state
+    def start_attack(self, direction):
+        """Start a new attack"""
         self.is_attacking = True
-        self.attack_timer = 0
-        self.attack_cooldown_timer = self.config['attack_cooldown']
-        self.combo_timer = self.config['combo_window']
+        self.attack_combo = 1
+        self.attack_duration_timer = self.config['attack_duration']
         
-        # Set attack push
-        self.is_attack_pushing = True
-        self.attack_push_timer = 0
-        self._set_attack_direction(direction)
-
-    def _set_attack_direction(self, direction: str):
-        """Set attack direction for push movement"""
-        direction_map = {
-            'right': (1, 0),
-            'left': (-1, 0),
-            'up': (0, -1),
-            'down': (0, 1)
-        }
+        # Get dynamic cooldown from player
+        cooldown = self.get_attack_cooldown()
+        self.attack_cooldown_timer = cooldown
         
-        dx, dy = direction_map.get(direction, (1, 0))
-        self.attack_direction_x = dx
-        self.attack_direction_y = dy
+        self.combo_window_timer = self.config['combo_window']
+        
+        # Start attack push movement
+        self.start_attack_push(direction)
 
-    def update_timers(self, dt: float):
-        """Update all combat-related timers"""
-        # Attack cooldown
+    def continue_combo(self, direction):
+        """Continue attack combo"""
+        self.attack_combo += 1
+        self.attack_duration_timer = self.config['attack_duration']
+        
+        # Get dynamic cooldown from player
+        cooldown = self.get_attack_cooldown()
+        self.attack_cooldown_timer = cooldown
+        
+        self.combo_window_timer = self.config['combo_window']
+        
+        # Start attack push movement
+        self.start_attack_push(direction)
+
+    def get_attack_cooldown(self):
+        """Get current attack cooldown with power up modifiers"""
+        if self.player_ref:
+            return self.player_ref.get_attack_cooldown()
+        return self.config['attack_cooldown']
+
+    def start_attack_push(self, direction):
+        """Start attack push movement"""
+        push_speed = self.config['attack_push_speed']
+        push_duration = self.config['attack_push_duration']
+        
+        if direction == 'right':
+            self.attack_push_x = push_speed
+            self.attack_push_y = 0
+        elif direction == 'left':
+            self.attack_push_x = -push_speed
+            self.attack_push_y = 0
+        elif direction == 'down':
+            self.attack_push_x = 0
+            self.attack_push_y = push_speed
+        else:  # up
+            self.attack_push_x = 0
+            self.attack_push_y = -push_speed
+            
+        self.attack_push_timer = push_duration
+
+    def update_timers(self, dt):
+        """Update all combat timers"""
+        # Update attack duration
+        if self.attack_duration_timer > 0:
+            self.attack_duration_timer -= dt
+            if self.attack_duration_timer <= 0:
+                self.end_attack()
+        
+        # Update attack cooldown
         if self.attack_cooldown_timer > 0:
             self.attack_cooldown_timer -= dt
-            
-        # Combo end cooldown
+        
+        # Update combo window
+        if self.combo_window_timer > 0:
+            self.combo_window_timer -= dt
+            if self.combo_window_timer <= 0:
+                self.start_combo_end_cooldown()
+        
+        # Update combo end cooldown
         if self.combo_end_cooldown_timer > 0:
             self.combo_end_cooldown_timer -= dt
+            if self.combo_end_cooldown_timer <= 0:
+                self.reset_combo()
         
-        # Recovery timer
-        if self.is_in_recovery:
-            self.attack_recovery_timer += dt
-            if self.attack_recovery_timer >= self.config['attack_recovery_time']:
+        # Update attack recovery
+        if self.attack_recovery_timer > 0:
+            self.attack_recovery_timer -= dt
+            if self.attack_recovery_timer <= 0:
                 self.is_in_recovery = False
-                self.attack_recovery_timer = 0
         
-        # Combo timer
-        if self.combo_timer > 0:
-            self.combo_timer -= dt
-        else:
-            self._handle_combo_timeout()
-        
-        # NEW: Queue timer
-        if self.attack_queued:
-            self.queue_timer -= dt
-            if self.queue_timer <= 0:
-                self.attack_queued = False
-        
-        # Attack push timer
-        if self.is_attack_pushing:
-            self.attack_push_timer += dt
-            if self.attack_push_timer >= self.config['attack_push_duration']:
-                self.is_attack_pushing = False
-                self.attack_push_timer = 0
-        
-        # Attack timer
-        if self.is_attacking:
-            self.attack_timer += dt
-            if self.attack_timer >= self.config['attack_duration']:
-                self.is_attacking = False
-                self.attack_timer = 0
-                self.is_in_recovery = True
-                self.attack_recovery_timer = 0
-                
-                # NEW: Check for queued attack
-                if self.attack_queued and self.can_attack():
-                    self.start_attack(self.queued_direction)
+        # Update attack push
+        if self.attack_push_timer > 0:
+            self.attack_push_timer -= dt
+            if self.attack_push_timer <= 0:
+                self.attack_push_x = 0
+                self.attack_push_y = 0
 
-    def _handle_combo_timeout(self):
-        """Handle combo timer expiration"""
-        if not self.is_attacking:
-            if (self.attack_combo >= self.config['max_combo'] - 1 and 
-                not self.combo_completed):
-                self.combo_completed = True
-                self.combo_end_cooldown_timer = self.config['combo_end_cooldown']
-            
-            self.attack_combo = 0
+    def end_attack(self):
+        """End current attack"""
+        self.is_attacking = False
+        self.attack_recovery_timer = self.config['attack_recovery_time']
+        self.is_in_recovery = True
 
-    def get_push_movement(self, dt: float) -> Tuple[float, float]:
-        """Calculate attack push movement"""
-        if not self.is_attack_pushing:
-            return 0, 0
-        
-        push_progress = self.attack_push_timer / self.config['attack_push_duration']
-        push_easing = (1.0 - push_progress) ** 2
-        
-        push_distance = self.config['attack_push_speed'] * push_easing * dt
-        push_x = self.attack_direction_x * push_distance
-        push_y = self.attack_direction_y * push_distance
-        
-        return push_x, push_y
+    def start_combo_end_cooldown(self):
+        """Start combo end cooldown"""
+        self.combo_end_cooldown_timer = self.config['combo_end_cooldown']
+
+    def reset_combo(self):
+        """Reset combo state"""
+        self.attack_combo = 0
+        self.combo_window_timer = 0
+        self.combo_end_cooldown_timer = 0
+
+    def get_push_movement(self, dt):
+        """Get current attack push movement"""
+        if self.attack_push_timer > 0:
+            return self.attack_push_x * dt, self.attack_push_y * dt
+        return 0, 0
+
+    def reset(self):
+        """Reset combat system"""
+        self.is_attacking = False
+        self.attack_combo = 0
+        self.attack_duration_timer = 0
+        self.attack_cooldown_timer = 0
+        self.combo_window_timer = 0
+        self.combo_end_cooldown_timer = 0
+        self.attack_recovery_timer = 0
+        self.is_in_recovery = False
+        self.attack_push_x = 0
+        self.attack_push_y = 0
+        self.attack_push_timer = 0
+
 # TESTING
 '''
 def main():
