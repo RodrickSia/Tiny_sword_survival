@@ -5,8 +5,8 @@ from health_system import HealthSystem, HealthBar
 from power_system import PowerSystem
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos=(400, 300), collision_sprites=None):
-        super().__init__()
+    def __init__(self, groups , pos=(400, 300), collision_sprites = None ):
+        super().__init__(groups)
         
         # Configuration
         self.config = {
@@ -44,9 +44,11 @@ class Player(pygame.sprite.Sprite):
         
         # Position
         self.rect.center = pos
+        self.pos = pygame.math.Vector2(self.rect.topleft)
+
         self.pos_x = float(self.rect.x)
         self.pos_y = float(self.rect.y)
-        
+        self.old_rect = self.rect.copy()
         # Movement and direction state
         self.is_moving = False
         self.direction = 'right'
@@ -58,7 +60,7 @@ class Player(pygame.sprite.Sprite):
         self.move_y = 0
 
         # Collision system - accept collision sprites from parameter
-        self.collision_sprites = collision_sprites or pygame.sprite.Group()
+        self.collision_sprites = collision_sprites
 
     def _init_sprite_system(self):
         """Initialize sprite and animation system"""
@@ -211,8 +213,34 @@ class Player(pygame.sprite.Sprite):
             self.is_moving = False
         
         return self.move_x, self.move_y
+    
+
+    def collision(self, direction):
+        col_sprites = pygame.sprite.spritecollide(self, self.collision_sprites, False)
+        if col_sprites:
+            if direction == 'horizontal':
+                for sprite in col_sprites:
+                    if self.rect.right >= sprite.rect.left and self.old_rect.right <= sprite.rect.left:
+                        self.rect.right = sprite.rect.left
+                        self.pos_x = self.rect.x
+
+                    if self.rect.left <= sprite.rect.right and self.old_rect.left >= sprite.rect.right:
+                        self.rect.left = sprite.rect.right
+                        self.pos_x = self.rect.x
+
+            if direction == 'vertical':
+                for sprite in col_sprites:
+                    if self.rect.bottom >= sprite.rect.top and self.old_rect.bottom <= sprite.rect.top:
+                        self.rect.bottom = sprite.rect.top
+                        self.pos_y = self.rect.y
+
+                    if self.rect.top <= sprite.rect.bottom and self.old_rect.top >= sprite.rect.bottom:
+                        self.rect.top = sprite.rect.bottom
+                        self.pos_y = self.rect.y
+
 
     def update(self, dt):
+        self.old_rect = self.rect.copy()
         """Main update function"""
         # Update health system
         self.health_system.update(dt)
@@ -231,6 +259,10 @@ class Player(pygame.sprite.Sprite):
         
         # Update animation
         self._update_animation(dt)
+
+        
+
+       
 
     def _apply_movement(self, dt, move_x, move_y):
         """Apply movement calculations"""
@@ -283,7 +315,10 @@ class Player(pygame.sprite.Sprite):
         self.pos_y = max(0, min(800 - self.rect.height, self.pos_y))
         
         self.rect.x = int(self.pos_x)
+        self.collision('horizontal')
         self.rect.y = int(self.pos_y)
+        self.collision('vertical')
+
 
     def _update_animation(self, dt):
         """Update animation"""
@@ -333,7 +368,7 @@ class Player(pygame.sprite.Sprite):
 
     def get_attack_range(self) -> float:
         """Get current attack range with power up modifiers"""
-        base_range = 80
+        base_range = 60
         
         # Apply area attack if active
         if 'area_attack' in self.active_power_ups:

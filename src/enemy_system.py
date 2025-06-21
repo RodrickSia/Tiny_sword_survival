@@ -5,13 +5,14 @@ import os
 from typing import List, Dict, Tuple
 from utils import LoadSprite, AnimationManager
 from health_system import HealthSystem, HealthBar
-
+from pygame.math import Vector2
+from map_loader import MapLoader
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, enemy_type: str, pos: Tuple[int, int], player_ref):
+    def __init__(self, enemy_type: str, pos: Tuple[int, int], player_ref,  all_enemies_group=None, collision_sprites=None):
         super().__init__()
         self.enemy_type = enemy_type
         self.player_ref = player_ref
-        
+        self.all_enemies = all_enemies_group
         # Enemy configurations
         self.configs = {
             'goblin': {
@@ -50,17 +51,22 @@ class Enemy(pygame.sprite.Sprite):
         }
         
         self.config = self.configs[enemy_type]
-        
+        self.collision_sprites = collision_sprites
         # Initialize systems
         self._init_sprite_system()
         self._init_health_system()
         self._init_ai_system()
         
         # Position and movement
+        self.knockback_vector = pygame.math.Vector2(0, 0)
+        self.knockback_timer = 0
+        self.knockback_duration = 0.15
         self.rect.center = pos
         self.pos_x = float(self.rect.x)
         self.pos_y = float(self.rect.y)
-        
+        self.old_rect = self.rect.copy()
+        self.pos = (self.pos_x, self.pos_y)
+
         # AI state
         self.state = 'chase'  # chase, attack, retreat, dead
         self.attack_timer = 0.0
@@ -121,6 +127,28 @@ class Enemy(pygame.sprite.Sprite):
     def take_damage(self, damage: int) -> bool:
         """Take damage from player"""
         return self.health_system.take_damage(damage)
+    
+    def _avoid_others(self):
+        """Đẩy enemy ra xa các enemy khác nếu bị đè lên nhau"""
+        if not self.all_enemies:
+            return
+
+        for other in self.all_enemies:
+            if other == self or other.state == 'dead':
+                continue
+
+            if self.rect.colliderect(other.rect):
+                offset = Vector2(self.rect.center) - Vector2(other.rect.center)
+                if offset.length() == 0:
+                    offset = Vector2(random.uniform(-1, 1), random.uniform(-1, 1))  # tránh chia 0
+                offset = offset.normalize() * 1.5  # lực đẩy nhẹ
+                self.pos_x += offset.x
+                self.pos_y += offset.y
+                self.rect.x = int(self.pos_x)
+                self.rect.y = int(self.pos_y)
+
+
+
         
     def update(self, dt: float):
         """Update enemy logic"""
@@ -136,10 +164,24 @@ class Enemy(pygame.sprite.Sprite):
         
         # Update AI
         self._update_ai(dt)
-        
+
+        self._avoid_others()
+
         # Update animation
         self._update_animation(dt)
+
+        self.old_rect = self.rect.copy()
         
+
+        if self.knockback_timer > 0:
+            self.pos_x += self.knockback_vector.x * dt
+            self.pos_y += self.knockback_vector.y * dt
+            self.rect.topleft = (int(self.pos_x), int(self.pos_y))
+            self.knockback_timer -= dt
+        else:
+            self.knockback_vector = pygame.math.Vector2(0, 0)
+              
+
     def _update_death_animation(self, dt: float):
         """Update death animation"""
         self.death_timer += dt
@@ -230,6 +272,7 @@ class Enemy(pygame.sprite.Sprite):
             # Update rect
             self.rect.x = int(self.pos_x)
             self.rect.y = int(self.pos_y)
+            
         else:
             self.is_moving = False
             
@@ -252,7 +295,19 @@ class Enemy(pygame.sprite.Sprite):
         """Perform attack on player"""
         if self.player_ref and self.player_ref.health_system.is_alive():
             self.player_ref.health_system.take_damage(self.config['damage'])
-            
+        
+        direction = pygame.math.Vector2(self.player_ref.rect.center) - pygame.math.Vector2(self.rect.center)
+        if direction.length() == 0:
+            direction = pygame.math.Vector2(1, 0)
+        direction = direction.normalize()
+
+    # Knockback ngược hướng tấn công
+        self.knockback_vector = -direction * 250  # 150 px/s là tốc độ bị đẩy lùi
+        self.knockback_timer = self.knockback_duration
+
+        self.player_ref.rect.x = int(self.player_ref.pos_x)
+        self.player_ref.rect.y = int(self.player_ref.pos_y)
+
     def _update_animation(self, dt: float):
         """Update enemy animation"""
         if self.health_system.is_alive():
@@ -267,9 +322,14 @@ class Enemy(pygame.sprite.Sprite):
             bar_y = self.rect.top - 20
             self.health_bar.draw(surface, self.health_system, (bar_x, bar_y))
 
+
+    
+
 class WaveManager:
-    def __init__(self, player_ref):
+    def __init__(self, player_ref, collision_sprites=None):
         self.player_ref = player_ref
+        self.collision_sprites = collision_sprites or pygame.sprite.Group()
+
         self.current_wave = 0
         self.enemies = pygame.sprite.Group()
         self.enemy_types = ['goblin', 'archer', 'warrior']
@@ -295,6 +355,7 @@ class WaveManager:
         self.wave_transition_timer = 0.0
         self.wave_transition_duration = 3.0  # 3 seconds between waves
         self.wave_completed = False
+        
         
     def start_wave(self):
         """Start a new wave"""
@@ -363,12 +424,13 @@ class WaveManager:
             # Random enemy type with weighted selection
             weights = [0.5, 0.3, 0.2]  # goblin, archer, warrior
             enemy_type = random.choices(self.enemy_types, weights=weights)[0]
-            
+           
         # Create enemy
-        enemy = Enemy(enemy_type, (spawn_x, spawn_y), self.player_ref)
+        enemy = Enemy(enemy_type, (spawn_x, spawn_y), self.player_ref,  all_enemies_group=self.enemies, collision_sprites=self.player_ref.collision_sprites)
+
         self.enemies.add(enemy)
         self.enemies_spawned += 1
-        
+    
     def draw(self, surface: pygame.Surface):
         """Draw all enemies and their health bars"""
         self.enemies.draw(surface)
