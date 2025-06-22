@@ -88,8 +88,9 @@ class Enemy(pygame.sprite.Sprite):
         )
         
         animation_speeds = {
-            'idle_animation_speed': 8,
-            'attack_animation_speed': 15
+            'idle_animation_speed': 10,
+            'walk_animation_speed': 15,
+            'attack_animation_speed': 18
         }
         
         self.animation_manager = AnimationManager(animations, animation_speeds)
@@ -296,6 +297,9 @@ class WaveManager:
         self.wave_transition_duration = 3.0  # 3 seconds between waves
         self.wave_completed = False
         
+        # Camera view (giả sử logic 1280x720, có thể lấy từ Game nếu cần)
+        self.camera_rect = pygame.Rect(0, 0, 1280, 720)
+        
     def start_wave(self):
         """Start a new wave"""
         self.current_wave += 1
@@ -316,7 +320,7 @@ class WaveManager:
         
         print(f"Starting wave {self.current_wave} with {self.enemies_to_spawn} enemies")
         
-    def update(self, dt: float):
+    def update(self, dt: float, camera_rect=None):
         """Update wave manager"""
         # Handle wave transition
         if self.wave_completed:
@@ -334,9 +338,14 @@ class WaveManager:
                 self._spawn_enemy()
                 self.spawn_timer = 0.0
                 
-        # Update enemies
-        self.enemies.update(dt)
+        # Update only visible enemies
+        if camera_rect is None:
+            camera_rect = self.camera_rect
+        for enemy in list(self.enemies):
+            if camera_rect.colliderect(enemy.rect):
+                enemy.update(dt)
         
+        # Remove dead enemies (already handled by .kill(), but keep list clean)
         # Check if wave is complete
         if self.wave_in_progress and self.enemies_spawned >= self.enemies_to_spawn:
             if len(self.enemies) == 0:
@@ -369,14 +378,15 @@ class WaveManager:
         self.enemies.add(enemy)
         self.enemies_spawned += 1
         
-    def draw(self, surface: pygame.Surface):
-        """Draw all enemies and their health bars"""
-        self.enemies.draw(surface)
-        
-        # Draw health bars
+    def draw(self, surface: pygame.Surface, camera_rect=None):
+        """Draw all enemies and their health bars (only if visible)"""
+        if camera_rect is None:
+            camera_rect = self.camera_rect
         for enemy in self.enemies:
-            enemy.draw_health_bar(surface)
-            
+            if camera_rect.colliderect(enemy.rect):
+                surface.blit(enemy.image, enemy.rect)
+                enemy.draw_health_bar(surface)
+        
     def get_enemy_count(self) -> int:
         """Get current number of enemies"""
         return len(self.enemies)

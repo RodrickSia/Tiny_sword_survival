@@ -320,7 +320,7 @@ class AnimationManager:
         if self.current_animation.startswith('attack'):
             return self._update_time_based_animation(dt, 'attack')
         elif is_moving and self.current_animation.startswith('walk'):
-            return self._update_distance_based_animation()
+            return self._update_time_based_animation(dt, 'walk')
         else:
             return self._update_time_based_animation(dt, 'idle')
 
