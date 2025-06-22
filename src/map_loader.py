@@ -4,32 +4,39 @@ import os
 import base64
 import zlib
 import struct
-
+import pytmx
 class MapLoader:
     def __init__(self, tmx_path):
         self.tmx_path = tmx_path
-        self.map_data = None
+        self.map_data = pytmx.load_pygame(tmx_path)
         self.tilesets = {}
         self.layers = []
         self.collision_sprites = []
         self.animated_tiles = []
         self.tile_animations = {}  # Store animation data for tiles
-        
+        self.collision_rects = []
         # Map properties
-        self.map_width = 0
-        self.map_height = 0
-        self.tile_width = 0
-        self.tile_height = 0
-        self.map_pixel_width = 0
-        self.map_pixel_height = 0
+        self.map_width = self.map_data.width
+        self.map_height = self.map_data.height
+        self.tile_width = self.map_data.tilewidth
+        self.tile_height = self.map_data.tileheight
+        self.map_pixel_width = self.map_width * self.tile_width
+        self.map_pixel_height = self.map_height * self.tile_height
+        
 
+
+    
+
+    
+    
+    
     def load_map(self):
         """Load and parse the TMX file"""
         try:
             if not os.path.exists(self.tmx_path):
                 print(f"TMX file not found: {self.tmx_path}")
                 return False
-            
+
             # Parse XML
             tree = ET.parse(self.tmx_path)
             self.map_data = tree.getroot()
@@ -142,14 +149,13 @@ class MapLoader:
         
         # Clear animated tiles list
         self.animated_tiles = []
-        
+        self.collision_sprites = pygame.sprite.Group()
+
         # Process tile layers
         for layer in self.map_data.findall('layer'):
             layer_name = layer.get('name')
             
             # Skip collision layer for now
-            if layer_name.lower() == 'collisions':
-                continue
                 
             layer_width = int(layer.get('width'))
             layer_height = int(layer.get('height'))
@@ -180,6 +186,24 @@ class MapLoader:
                     self.layers.append(layer_info)
                     
                     print(f"Processed layer: {layer_name} ({layer_width}x{layer_height})")
+
+        # Process object layers (for collision)
+        for objectgroup in self.map_data.findall('objectgroup'):
+            group_name = objectgroup.get('name', '').lower()
+            if group_name == 'collision' or 'collision' in group_name:
+                for obj in objectgroup.findall('object'):
+                    x = float(obj.get('x', 0))
+                    y = float(obj.get('y', 0))
+                    w = float(obj.get('width', 0))
+                    h = float(obj.get('height', 0))
+
+                    if w != None and h != None:
+                        StaticObstacle((x, y), (w, h), [self.collision_sprites])
+                    else:
+                        print(f"⚠️ Bỏ qua object không hợp lệ: x={x}, y={y}, w={w}, h={h}")
+
+                print(f"✔ Đã load {len(self.collision_sprites)} vật cản từ object layer.")
+              
 
     def _find_animated_tiles(self, layer_info):
         """Find and store animated tile positions"""
@@ -360,3 +384,12 @@ class MapLoader:
                             return layer['data'][tile_index]
         
         return 0
+    
+class StaticObstacle(pygame.sprite.Sprite):
+    def __init__(self, pos, size, groups):
+        super().__init__(groups)
+        self.image = pygame.Surface(size)
+        self.image = pygame.Surface(size, pygame.SRCALPHA)  
+        self.image.fill((255, 255, 0, 100))
+        self.rect = self.image.get_rect(topleft=pos)
+        self.old_rect = self.rect.copy()
