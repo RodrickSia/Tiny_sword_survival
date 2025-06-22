@@ -2,12 +2,13 @@ import pygame
 from settings import *
 from player import Player
 from map_loader import MapLoader
-from enemy_system import WaveManager
+from enemy_system import WaveManager, Enemy
 from powerup_system import PowerUpManager
 from audio_system import AudioSystem
 from ui_system import Menu, HUD, GameOverScreen, LeaderboardScreen
 from leaderboard_system import LeaderboardSystem
 import os
+import math
 from resolutionscaler import ResolutionScalerFullScreenStretch
 
 class Game:
@@ -57,6 +58,7 @@ class Game:
             print("Map setup complete")
             print(f"Collision objects created: {len(self.map_loader.collision_sprites)}")
             print(f"Animated tiles: {len(self.map_loader.animated_tiles)}")
+           #collision_rects = map_loader.get_collision_rects()
         else:
             print("Failed to load map")
             self.map_loader = None
@@ -70,13 +72,13 @@ class Game:
         if self.map_loader:
             collision_sprites = self.map_loader.collision_sprites
             
-        self.player = Player(collision_sprites=collision_sprites)
+        self.player = Player( pos=(400,300),groups=self.all_sprites, collision_sprites=collision_sprites)
         
         # Center the player on screen
         self.player.rect.center = (self.logic_width // 2, self.logic_height // 2)
         self.player.pos_x = float(self.player.rect.x)
         self.player.pos_y = float(self.player.rect.y)
-    
+        
         self.all_sprites.add(self.player)
         
         # Setup wave manager
@@ -271,6 +273,9 @@ class Game:
         elif self.game_state == 'leaderboard':
             self.leaderboard_screen.handle_events(logic_events)
 
+    
+    
+
     def update(self, dt):
         if self.game_state != 'playing':
             return
@@ -316,9 +321,19 @@ class Game:
         
         # Check enemies in attack area
         for enemy in self.wave_manager.enemies:
+            
             if attack_rect.colliderect(enemy.rect):
                 if enemy.take_damage(self.player.get_damage()):
                     self.audio_system.play_sound('enemy_hit')
+                    #dx = enemy.rect.centerx - self.player.rect.centerx
+                    #dy = enemy.rect.centery - self.player.rect.centery
+                    #dist = math.hypot(dx, dy)
+                    #if dist != 0:
+                       #knockback_strength = 20  
+                       #dx, dy = dx / dist, dy / dist
+                       #enemy.pos_x += dx * knockback_strength
+                       #enemy.pos_y += dy * knockback_strength
+                       #enemy.rect.center = (int(enemy.pos_x), int(enemy.pos_y))
                     # Remove dead enemies
                     if not enemy.health_system.is_alive():
                         # Play death sound when enemy starts death animation
@@ -330,7 +345,7 @@ class Game:
     def get_attack_area(self):
         """Get the attack area rectangle based on player direction"""
         attack_range = self.player.get_attack_range()  # Use dynamic range
-        attack_width = 60
+        attack_width = 10
         
         if self.player.direction == 'right':
             return pygame.Rect(self.player.rect.right, self.player.rect.centery - attack_width//2, 
