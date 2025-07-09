@@ -39,6 +39,13 @@ class Player(pygame.sprite.Sprite):
         self.enemies_killed = 0
         self.waves_survived = 0
         
+        # Damage effect system
+        self.damage_flash_timer = 0.0
+        self.damage_flash_duration = 0.3  # seconds
+        self.damage_flash_alpha = 0
+        self.is_flashing = False
+        self.original_image = None
+        
         # Movement properties
         self.diagonal_speed = self.config['speed'] * 0.707
         
@@ -251,6 +258,9 @@ class Player(pygame.sprite.Sprite):
         # Update combat system timers
         self.combat_system.update_timers(dt)
         
+        # Update damage flash effect
+        self.update_damage_flash(dt)
+        
         # Handle input
         move_x, move_y = self.handle_input()
         
@@ -330,7 +340,13 @@ class Player(pygame.sprite.Sprite):
 
     def take_damage(self, damage: int) -> bool:
         """Take damage from enemies"""
-        return self.health_system.take_damage(damage)
+        damage_taken = self.health_system.take_damage(damage)
+        
+        # Start damage flash effect if damage was taken
+        if damage_taken:
+            self.start_damage_flash()
+            
+        return damage_taken
 
     def heal(self, amount: int) -> bool:
         """Heal the player"""
@@ -422,6 +438,12 @@ class Player(pygame.sprite.Sprite):
         self.pos_x = 640  # Center of screen
         self.pos_y = 400
         self.rect.center = (self.pos_x, self.pos_y)
+        
+        # Reset damage flash effect
+        self.damage_flash_timer = 0.0
+        self.damage_flash_alpha = 0
+        self.is_flashing = False
+        self.original_image = None
 
     def get_last_powerup_popup(self):
         """Trả về (desc, thời gian còn lại) nếu hiệu ứng vừa nhận còn hiển thị"""
@@ -430,3 +452,45 @@ class Player(pygame.sprite.Sprite):
         if self.last_powerup_effect and (time.time() - self.last_powerup_time) < popup_duration:
             return self.last_powerup_desc, popup_duration - (time.time() - self.last_powerup_time)
         return None, 0
+
+    def start_damage_flash(self):
+        """Start the damage flash effect"""
+        self.damage_flash_timer = self.damage_flash_duration
+        self.is_flashing = True
+        self.original_image = self.image.copy()
+
+    def update_damage_flash(self, dt):
+        """Update the damage flash effect"""
+        if self.is_flashing:
+            self.damage_flash_timer -= dt
+            
+            if self.damage_flash_timer <= 0:
+                # End flash effect
+                self.is_flashing = False
+                self.damage_flash_alpha = 0
+                if self.original_image:
+                    self.image = self.original_image
+            else:
+                # Update flash alpha based on remaining time
+                progress = self.damage_flash_timer / self.damage_flash_duration
+                # Create a pulsing effect (0.3 to 0.8 alpha)
+                self.damage_flash_alpha = 0.3 + 0.5 * (1.0 - progress)
+                self.apply_damage_flash()
+
+    def apply_damage_flash(self):
+        """Apply the red flash effect to the current image"""
+        if self.original_image is None:
+            self.original_image = self.image.copy()
+        
+        # Create a copy of the current image
+        flash_image = self.image.copy()
+        
+        # Create a red overlay
+        red_overlay = pygame.Surface(flash_image.get_size(), pygame.SRCALPHA)
+        red_overlay.fill((255, 0, 0, int(255 * self.damage_flash_alpha)))
+        
+        # Apply the red overlay
+        flash_image.blit(red_overlay, (0, 0))
+        
+        # Update the image
+        self.image = flash_image

@@ -8,6 +8,114 @@ from health_system import HealthSystem, HealthBar
 from pygame.math import Vector2
 from map_loader import MapLoader
 
+
+class Arrow(pygame.sprite.Sprite):
+    def __init__(self, start_pos: Tuple[int, int], target_pos: Tuple[int, int], damage: int, speed: float = 200, player_velocity: Tuple[float, float] = (0, 0)):
+        super().__init__()
+        
+        # Arrow properties
+        self.damage = damage
+        self.speed = speed
+        self.lifetime = 100.0  # Arrow disappears after 18 seconds (tăng 1.5 lần từ 12)
+        self.lifetime_timer = 0.0
+        
+        # Trail effect properties
+        self.trail_positions = []
+        self.max_trail_length = 12  # Tăng trail cho đẹp
+        
+        # Calculate direction to current target position (không dự đoán)
+        dx = target_pos[0] - start_pos[0]
+        dy = target_pos[1] - start_pos[1]
+        distance = math.sqrt(dx*dx + dy*dy)
+        
+        if distance > 0:
+            self.direction_x = dx / distance
+            self.direction_y = dy / distance
+        else:
+            self.direction_x = 0
+            self.direction_y = 1
+        
+        # Vẽ lại mũi tên với hình dạng đẹp hơn
+        arrow_w, arrow_h = 80, 16  # Giảm chiều cao để mũi tên mảnh hơn
+        self.image = pygame.Surface((arrow_w, arrow_h), pygame.SRCALPHA)
+        
+        # Bóng dưới mũi tên
+        shadow = pygame.Surface((arrow_w, 4), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0,0,0,40), (10, arrow_h-4, arrow_w-20, 4))
+        self.image.blit(shadow, (0,0))
+        
+        # Thân mũi tên (gradient nâu-vàng)
+        for i in range(50):
+            # Gradient từ nâu sang vàng
+            color = (
+                139 + int(i*2),  # R tăng dần
+                69 + int(i*3),   # G tăng dần
+                19 + int(i*4)    # B tăng dần
+            )
+            pygame.draw.rect(self.image, color, (10+i, 6, 1, 4))
+        
+        # Đầu mũi tên (hình tam giác cân, màu xám đậm)
+        pygame.draw.polygon(self.image, (64,64,64), [(60,2),(arrow_w-2,arrow_h//2),(60,arrow_h-2)])
+        # Viền đầu mũi tên
+        pygame.draw.polygon(self.image, (32,32,32), [(60,2),(arrow_w-2,arrow_h//2),(60,arrow_h-2)], 1)
+        
+        # Đuôi lông vũ (3 lông vũ trắng)
+        feather_colors = [(255,255,255), (240,240,240), (220,220,220)]
+        for i in range(3):
+            y_offset = 2 + i * 2
+            pygame.draw.polygon(self.image, feather_colors[i], [(8,arrow_h//2),(2,y_offset),(2,arrow_h-y_offset)])
+        
+        # Thêm chi tiết lông vũ
+        pygame.draw.line(self.image, (200,200,200), (4,4), (8,arrow_h//2), 1)
+        pygame.draw.line(self.image, (200,200,200), (4,arrow_h-4), (8,arrow_h//2), 1)
+        pygame.draw.line(self.image, (180,180,180), (6,6), (8,arrow_h//2), 1)
+        pygame.draw.line(self.image, (180,180,180), (6,arrow_h-6), (8,arrow_h//2), 1)
+        self.rect = self.image.get_rect()
+        # Position
+        self.rect.center = start_pos
+        self.pos_x = float(start_pos[0])
+        self.pos_y = float(start_pos[1])
+        # Calculate rotation angle
+        self.angle = math.degrees(math.atan2(-dy, dx))
+        self.image = pygame.transform.rotate(self.image, self.angle)
+        self.rect = self.image.get_rect(center=self.rect.center)
+        
+    def update(self, dt: float):
+        """Update arrow movement"""
+        self.lifetime_timer += dt
+        
+        if self.lifetime_timer >= self.lifetime:
+            self.kill()
+            return
+        
+        # Store current position for trail
+        self.trail_positions.append((int(self.pos_x), int(self.pos_y)))
+        if len(self.trail_positions) > self.max_trail_length:
+            self.trail_positions.pop(0)
+        
+        # Move arrow
+        self.pos_x += self.direction_x * self.speed * dt
+        self.pos_y += self.direction_y * self.speed * dt
+        
+        # Update rect
+        self.rect.center = (int(self.pos_x), int(self.pos_y))
+        
+    def draw(self, surface: pygame.Surface):
+        """Draw the arrow with trail effect"""
+        # Draw trail với hiệu ứng mờ dần (không còn vạch ngang rõ ràng)
+        for i, pos in enumerate(self.trail_positions):
+            # Alpha giảm dần từ đầu đến cuối trail
+            alpha = int(80 * (i / len(self.trail_positions)))
+            if alpha > 5:  # Chỉ vẽ nếu đủ sáng
+                # Trail nhỏ hơn và mờ hơn
+                trail_surface = pygame.Surface((16, 3), pygame.SRCALPHA)
+                trail_surface.fill((255, 180, 40, alpha))  # Màu cam nhạt thay vì vàng
+                trail_rect = trail_surface.get_rect(center=pos)
+                surface.blit(trail_surface, trail_rect)
+        
+        # Draw main arrow
+        surface.blit(self.image, self.rect)
+
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, enemy_type: str, pos: Tuple[int, int], player_ref,  all_enemies_group=None, collision_sprites=None):
         super().__init__()
@@ -71,6 +179,10 @@ class Enemy(pygame.sprite.Sprite):
         self.state = 'chase'  # chase, attack, retreat, dead
         self.attack_timer = 0.0
         self.last_attack_time = 0.0
+        
+        # Archer specific properties
+        self.arrows = pygame.sprite.Group()
+        self.is_archer = enemy_type == 'archer'
         
         # Animation state
         self.direction = 'right'
@@ -170,6 +282,10 @@ class Enemy(pygame.sprite.Sprite):
 
         # Update animation
         self._update_animation(dt)
+        
+        # Update arrows if archer
+        if self.is_archer:
+            self.arrows.update(dt)
 
         self.old_rect = self.rect.copy()
         
@@ -234,17 +350,32 @@ class Enemy(pygame.sprite.Sprite):
         # Update attack timer
         self.attack_timer += dt
         
-        # Determine state
-        if distance <= self.config['attack_range']:
-            self.state = 'attack'
+        # Determine state based on enemy type
+        if self.is_archer:
+            # Archer behavior: keep distance and shoot
+            min_range = 80  # Minimum distance to keep
+            max_range = self.config['attack_range']  # Maximum shooting range
+            
+            if distance < min_range:
+                self.state = 'retreat'
+            elif distance <= max_range:
+                self.state = 'attack'
+            else:
+                self.state = 'chase'
         else:
-            self.state = 'chase'
+            # Melee enemy behavior
+            if distance <= self.config['attack_range']:
+                self.state = 'attack'
+            else:
+                self.state = 'chase'
             
         # Execute state behavior
         if self.state == 'chase':
             self._chase_player(dt, dx, dy, distance)
         elif self.state == 'attack':
             self._attack_player(dt, dx, dy, distance)
+        elif self.state == 'retreat':
+            self._retreat_from_player(dt, dx, dy, distance)
             
     def _chase_player(self, dt: float, dx: float, dy: float, distance: float):
         """Chase the player"""
@@ -294,8 +425,15 @@ class Enemy(pygame.sprite.Sprite):
             
     def _perform_attack(self):
         """Perform attack on player"""
-        if self.player_ref and self.player_ref.health_system.is_alive():
-            self.player_ref.health_system.take_damage(self.config['damage'])
+        if not self.player_ref or not self.player_ref.health_system.is_alive():
+            return
+            
+        if self.is_archer:
+            # Archer shoots arrow
+            self._shoot_arrow()
+        else:
+            # Melee attack
+            self.player_ref.take_damage(self.config['damage'])
         
         #direction = pygame.math.Vector2(self.player_ref.rect.center) - pygame.math.Vector2(self.rect.center)
         #if direction.length() == 0:
@@ -308,6 +446,58 @@ class Enemy(pygame.sprite.Sprite):
 
         self.player_ref.rect.x = int(self.player_ref.pos_x)
         self.player_ref.rect.y = int(self.player_ref.pos_y)
+
+    def _shoot_arrow(self):
+        """Shoot an arrow at the player"""
+        if not self.player_ref:
+            return
+            
+        # Calculate target position (current player position)
+        target_x = self.player_ref.rect.centerx
+        target_y = self.player_ref.rect.centery
+        
+        # Create arrow with current target position (no prediction)
+        arrow = Arrow(
+            start_pos=self.rect.center,
+            target_pos=(target_x, target_y),
+            damage=self.config['damage'],
+            speed=200,  # Giảm tốc độ từ 350 xuống 200
+            player_velocity=(0, 0)  # Không dùng prediction
+        )
+        
+        # Add arrow to group
+        self.arrows.add(arrow)
+
+    def _retreat_from_player(self, dt: float, dx: float, dy: float, distance: float):
+        """Retreat from player (for archers)"""
+        if distance > 0:
+            # Move away from player
+            dx = -dx / distance
+            dy = -dy / distance
+            
+            # Move away from player
+            speed = self.config['speed'] * 0.8  # Slightly slower when retreating
+            move_x = dx * speed * dt
+            move_y = dy * speed * dt
+            
+            # Update position
+            self.pos_x += move_x
+            self.pos_y += move_y
+            
+            # Update direction for animation
+            if abs(dx) > abs(dy):
+                self.direction = 'right' if dx > 0 else 'left'
+            else:
+                self.direction = 'down' if dy > 0 else 'up'
+                
+            self.is_moving = True
+            
+            # Update rect
+            self.rect.x = int(self.pos_x)
+            self.rect.y = int(self.pos_y)
+            
+        else:
+            self.is_moving = False
 
     def _update_animation(self, dt: float):
         """Update enemy animation"""
@@ -322,6 +512,12 @@ class Enemy(pygame.sprite.Sprite):
             bar_x = self.rect.centerx - self.health_bar.width // 2
             bar_y = self.rect.top - 20
             self.health_bar.draw(surface, self.health_system, (bar_x, bar_y))
+    
+    def draw_arrows(self, surface: pygame.Surface):
+        """Draw arrows if archer"""
+        if self.is_archer:
+            for arrow in self.arrows:
+                arrow.draw(surface)
 
 
     
@@ -404,6 +600,13 @@ class WaveManager:
         for enemy in list(self.enemies):
             if camera_rect.colliderect(enemy.rect):
                 enemy.update(dt)
+            else:
+                # Update arrows even if enemy is off-screen (for long-range arrows)
+                if enemy.is_archer:
+                    enemy.arrows.update(dt)
+        
+        # Check arrow collisions with player
+        self._check_arrow_collisions()
         
         # Check if wave is complete
         if self.wave_in_progress and self.enemies_spawned >= self.enemies_to_spawn:
@@ -443,11 +646,15 @@ class WaveManager:
         if camera_rect is None:
             camera_rect = self.camera_rect
         
-        # Draw health bars
+        # Draw enemies and their arrows
         for enemy in self.enemies:
             if camera_rect.colliderect(enemy.rect):
                 surface.blit(enemy.image, enemy.rect)
                 enemy.draw_health_bar(surface)
+                enemy.draw_arrows(surface)
+            else:
+                # Draw arrows even if enemy is off-screen (for long-range arrows)
+                enemy.draw_arrows(surface)
             
     def get_enemy_count(self) -> int:
         """Get current number of enemies"""
@@ -464,4 +671,30 @@ class WaveManager:
         """Get progress of wave transition (0.0 to 1.0)"""
         if not self.wave_completed:
             return 0.0
-        return min(1.0, self.wave_transition_timer / self.wave_transition_duration) 
+        return min(1.0, self.wave_transition_timer / self.wave_transition_duration)
+    
+    def _check_arrow_collisions(self):
+        """Check if any arrows hit the player"""
+        if not self.player_ref:
+            return
+            
+        for enemy in self.enemies:
+            if enemy.is_archer:
+                for arrow in list(enemy.arrows):
+                    if arrow.rect.colliderect(self.player_ref.rect):
+                        # Arrow hit player
+                        self.player_ref.take_damage(arrow.damage)
+                        arrow.kill()  # Remove the arrow
+    
+    def _check_arrow_collisions(self):
+        """Check if any arrows hit the player"""
+        if not self.player_ref:
+            return
+            
+        for enemy in self.enemies:
+            if enemy.is_archer:
+                for arrow in list(enemy.arrows):
+                    if arrow.rect.colliderect(self.player_ref.rect):
+                        # Arrow hit player
+                        self.player_ref.take_damage(arrow.damage)
+                        arrow.kill()  # Remove the arrow 
