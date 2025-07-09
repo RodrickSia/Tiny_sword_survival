@@ -58,7 +58,6 @@ class Game:
             print("Map setup complete")
             print(f"Collision objects created: {len(self.map_loader.collision_sprites)}")
             print(f"Animated tiles: {len(self.map_loader.animated_tiles)}")
-           #collision_rects = map_loader.get_collision_rects()
         else:
             print("Failed to load map")
             self.map_loader = None
@@ -82,7 +81,7 @@ class Game:
         self.all_sprites.add(self.player)
         
         # Setup wave manager
-        self.wave_manager = WaveManager(self.player)
+        self.wave_manager = WaveManager(self.player, collision_sprites=collision_sprites)
         
         # Setup power-up manager
         self.powerup_manager = PowerUpManager(self.player)

@@ -126,7 +126,7 @@ class Enemy(pygame.sprite.Sprite):
         self.configs = {
             'goblin': {
                 'health': 30,
-                'speed': 120,
+                'speed': 80,
                 'damage': 5,
                 'attack_range': 50,
                 'attack_cooldown': 1.0,
@@ -137,7 +137,7 @@ class Enemy(pygame.sprite.Sprite):
             },
             'archer': {
                 'health': 20,
-                'speed': 100,
+                'speed': 70,
                 'damage': 7,
                 'attack_range': 150,
                 'attack_cooldown': 2.0,
@@ -148,7 +148,7 @@ class Enemy(pygame.sprite.Sprite):
             },
             'warrior': {
                 'health': 50,
-                'speed': 80,
+                'speed': 60,
                 'damage': 10,
                 'attack_range': 60,
                 'attack_cooldown': 1.5,
@@ -264,6 +264,8 @@ class Enemy(pygame.sprite.Sprite):
 
         
     def update(self, dt: float):
+
+        self.old_rect = self.rect.copy()
         """Update enemy logic"""
         if self.state == 'dead':
             self._update_death_animation(dt)
@@ -287,7 +289,6 @@ class Enemy(pygame.sprite.Sprite):
         if self.is_archer:
             self.arrows.update(dt)
 
-        self.old_rect = self.rect.copy()
         
 
         if self.knockback_timer > 0:
@@ -390,8 +391,15 @@ class Enemy(pygame.sprite.Sprite):
             move_y = dy * speed * dt
             
             # Update position
+            # Di chuyển theo trục X
             self.pos_x += move_x
+            self.rect.x = int(self.pos_x)
+            self.check_collision('horizontal')
+
+            # Di chuyển theo trục Y
             self.pos_y += move_y
+            self.rect.y = int(self.pos_y)
+            self.check_collision('vertical')
             
             # Update direction for animation
             if abs(dx) > abs(dy):
@@ -407,7 +415,26 @@ class Enemy(pygame.sprite.Sprite):
             
         else:
             self.is_moving = False
-            
+
+    def check_collision(self, direction):
+        hits = pygame.sprite.spritecollide(self, self.collision_sprites, False)
+        if direction == 'horizontal':
+            for sprite in hits:
+                if self.rect.right >= sprite.rect.left and self.old_rect.right <= sprite.rect.left:
+                    self.rect.right = sprite.rect.left
+                    self.pos_x = self.rect.x
+                elif self.rect.left <= sprite.rect.right and self.old_rect.left >= sprite.rect.right:
+                    self.rect.left = sprite.rect.right
+                    self.pos_x = self.rect.x
+        elif direction == 'vertical':
+            for sprite in hits:
+                if self.rect.bottom >= sprite.rect.top and self.old_rect.bottom <= sprite.rect.top:
+                    self.rect.bottom = sprite.rect.top
+                    self.pos_y = self.rect.y
+                elif self.rect.top <= sprite.rect.bottom and self.old_rect.top >= sprite.rect.bottom:
+                    self.rect.top = sprite.rect.bottom
+                    self.pos_y = self.rect.y
+        
     def _attack_player(self, dt: float, dx: float, dy: float, distance: float):
         """Attack the player"""
         self.is_moving = False
@@ -533,8 +560,8 @@ class WaveManager:
         
         # Wave configuration
         self.wave_config = {
-            'enemies_per_wave': 5,
-            'enemy_increase_per_wave': 2,
+            'enemies_per_wave': 4,
+            'enemy_increase_per_wave': 1,
             'boss_wave_interval': 5,  # Every 5 waves spawn a boss
             'spawn_radius': 200,  # Distance from player to spawn enemies
         }
@@ -622,9 +649,10 @@ class WaveManager:
             return
             
         # Get spawn position around player
-        angle = random.uniform(0, 2 * math.pi)
-        spawn_x = self.player_ref.rect.centerx + math.cos(angle) * self.wave_config['spawn_radius']
-        spawn_y = self.player_ref.rect.centery + math.sin(angle) * self.wave_config['spawn_radius']
+        spawn_rect = pygame.Rect(200, 200, 900, 400)  # ví dụ: mép phải màn hình
+
+        spawn_x = random.uniform(spawn_rect.left, spawn_rect.right)
+        spawn_y = random.uniform(spawn_rect.top, spawn_rect.bottom)
         
         # Choose enemy type
         if self.current_wave % self.wave_config['boss_wave_interval'] == 0 and self.enemies_spawned == self.enemies_to_spawn - 1:

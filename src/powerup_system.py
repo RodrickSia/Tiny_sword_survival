@@ -132,11 +132,10 @@ class PowerUpManager:
         if not self.player_ref:
             return
             
-        # Get spawn position around player
-        angle = random.uniform(0, 2 * math.pi)
-        distance = random.uniform(100, 300)
-        spawn_x = self.player_ref.rect.centerx + math.cos(angle) * distance
-        spawn_y = self.player_ref.rect.centery + math.sin(angle) * distance
+        spawn_rect = pygame.Rect(200, 200, 900, 400)  # ví dụ: mép phải màn hình
+
+        spawn_x = random.uniform(spawn_rect.left, spawn_rect.right)
+        spawn_y = random.uniform(spawn_rect.top, spawn_rect.bottom)
         
         # Choose power-up type
         powerup_type = random.choices(self.powerup_types, weights=self.powerup_weights)[0]
