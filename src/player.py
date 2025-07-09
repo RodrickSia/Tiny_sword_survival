@@ -15,7 +15,7 @@ class Player(pygame.sprite.Sprite):
             'attack_cooldown': 0.025,
             'max_combo': 2,
             'combo_window': 0.6,
-            'combo_end_cooldown': 0.4,
+            'combo_end_cooldown': 0.2,
             'attack_push_speed': 400,
             'attack_push_duration': 0.12,
             'attack_recovery_time': 0.08,
