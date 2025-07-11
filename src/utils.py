@@ -445,162 +445,160 @@ class InputHandler:
 class CombatSystem:
     def __init__(self, config):
         self.config = config
-        self.is_attacking = False
-        self.attack_combo = 0
-        self.attack_duration_timer = 0
-        self.attack_cooldown_timer = 0
-        self.combo_window_timer = 0
-        self.combo_end_cooldown_timer = 0
-        self.attack_recovery_timer = 0
-        self.is_in_recovery = False
-        
-        # Attack push movement
-        self.attack_push_x = 0
-        self.attack_push_y = 0
-        self.attack_push_timer = 0
-        
-        # Player reference for dynamic stats
         self.player_ref = None
+        self.audio_system = None
+        
+        # Attack state
+        self.is_attacking = False
+        self.attack_direction = 'right'
+        self.attack_start_time = 0.0
+        self.attack_combo = 0
+        self.next_attack_time = 0.0
+        
+        # Combo system
+        self.can_combo = False
+        self.combo_available_time = 0.0
+        self.combo_window_end = 0.0
+        
+        # Attack push/dash system
+        self.attack_push_timer = 0.0
+        self.is_in_recovery = False
+        self.attack_recovery_timer = 0.0
         
     def set_player_ref(self, player):
-        """Set reference to player for dynamic stats"""
+        """Set reference to player object"""
         self.player_ref = player
-
+        if hasattr(player, 'audio_system'):
+            self.audio_system = player.audio_system
+    
+    def reset(self):
+        """Reset combat system to initial state"""
+        self.is_attacking = False
+        self.attack_direction = 'right'
+        self.attack_start_time = 0.0
+        self.attack_combo = 0
+        self.next_attack_time = 0.0
+        self.can_combo = False
+        self.combo_available_time = 0.0
+        self.combo_window_end = 0.0
+        self.attack_push_timer = 0.0
+        self.is_in_recovery = False
+        self.attack_recovery_timer = 0.0
+        
     def try_attack(self, direction):
-        """Try to start an attack"""
-        if self.attack_cooldown_timer <= 0 and not self.is_attacking and not self.is_in_recovery:
-            self.start_attack(direction)
-        elif self.combo_window_timer > 0 and self.attack_combo < self.config['max_combo']:
-            # Continue combo
-            self.continue_combo(direction)
-
-    def start_attack(self, direction):
-        """Start a new attack"""
+        """Try to execute an attack"""
+        current_time = pygame.time.get_ticks() / 1000.0
+        
+        if not self.is_attacking and current_time >= self.next_attack_time:
+            self._execute_attack(direction)
+            return True
+        elif self.is_attacking and self.can_combo and current_time >= self.combo_available_time:
+            self._execute_combo_attack(direction)
+            return True
+        return False
+    
+    def _execute_attack(self, direction):
+        """Execute the initial attack"""
+        current_time = pygame.time.get_ticks() / 1000.0
         self.is_attacking = True
+        self.attack_direction = direction
+        self.attack_start_time = current_time
         self.attack_combo = 1
-        self.attack_duration_timer = self.config['attack_duration']
         
-        # Get dynamic cooldown from player
-        cooldown = self.get_attack_cooldown()
-        self.attack_cooldown_timer = cooldown
+        # Play attack sound
+        if self.audio_system:
+            self.audio_system.play_sound('player_attack', volume=0.4)
         
-        self.combo_window_timer = self.config['combo_window']
+        # Set up combo timing
+        self.can_combo = True
+        self.combo_available_time = current_time + 0.1
+        self.combo_window_end = current_time + self.config['combo_window']
         
-        # Start attack push movement
-        self.start_attack_push(direction)
-
-    def continue_combo(self, direction):
-        """Continue attack combo"""
-        self.attack_combo += 1
-        self.attack_duration_timer = self.config['attack_duration']
+        # Set up attack push
+        self.attack_push_timer = self.config['attack_push_duration']
         
-        # Get dynamic cooldown from player
-        cooldown = self.get_attack_cooldown()
-        self.attack_cooldown_timer = cooldown
+        print(f"Attack 1 executed in direction: {direction}")
+    
+    def _execute_combo_attack(self, direction):
+        """Execute a combo attack"""
+        current_time = pygame.time.get_ticks() / 1000.0
+        self.attack_combo = 2
+        self.can_combo = False
         
-        self.combo_window_timer = self.config['combo_window']
+        # Play attack sound for combo
+        if self.audio_system:
+            self.audio_system.play_sound('player_attack', volume=0.4)
         
-        # Start attack push movement
-        self.start_attack_push(direction)
-
-    def get_attack_cooldown(self):
-        """Get current attack cooldown with power up modifiers"""
-        if self.player_ref:
-            return self.player_ref.get_attack_cooldown()
-        return self.config['attack_cooldown']
-
-    def start_attack_push(self, direction):
-        """Start attack push movement"""
-        push_speed = self.config['attack_push_speed']
-        push_duration = self.config['attack_push_duration']
+        # Reset attack push for combo
+        self.attack_push_timer = self.config['attack_push_duration']
         
-        if direction == 'right':
-            self.attack_push_x = push_speed
-            self.attack_push_y = 0
-        elif direction == 'left':
-            self.attack_push_x = -push_speed
-            self.attack_push_y = 0
-        elif direction == 'down':
-            self.attack_push_x = 0
-            self.attack_push_y = push_speed
-        else:  # up
-            self.attack_push_x = 0
-            self.attack_push_y = -push_speed
-            
-        self.attack_push_timer = push_duration
-
+        print(f"Combo attack executed in direction: {direction}")
+    
     def update_timers(self, dt):
         """Update all combat timers"""
-        # Update attack duration
-        if self.attack_duration_timer > 0:
-            self.attack_duration_timer -= dt
-            if self.attack_duration_timer <= 0:
-                self.end_attack()
+        current_time = pygame.time.get_ticks() / 1000.0
         
-        # Update attack cooldown
-        if self.attack_cooldown_timer > 0:
-            self.attack_cooldown_timer -= dt
+        # Update attack state
+        if self.is_attacking:
+            if current_time >= self.attack_start_time + self.config['attack_duration']:
+                self._end_attack()
         
         # Update combo window
-        if self.combo_window_timer > 0:
-            self.combo_window_timer -= dt
-            if self.combo_window_timer <= 0:
-                self.start_combo_end_cooldown()
+        if self.can_combo and current_time >= self.combo_window_end:
+            self.can_combo = False
         
-        # Update combo end cooldown
-        if self.combo_end_cooldown_timer > 0:
-            self.combo_end_cooldown_timer -= dt
-            if self.combo_end_cooldown_timer <= 0:
-                self.reset_combo()
-        
-        # Update attack recovery
-        if self.attack_recovery_timer > 0:
-            self.attack_recovery_timer -= dt
-            if self.attack_recovery_timer <= 0:
-                self.is_in_recovery = False
-        
-        # Update attack push
+        # Update attack push timer
         if self.attack_push_timer > 0:
             self.attack_push_timer -= dt
             if self.attack_push_timer <= 0:
-                self.attack_push_x = 0
-                self.attack_push_y = 0
-
-    def end_attack(self):
-        """End current attack"""
+                self.attack_push_timer = 0
+                self.is_in_recovery = True
+                self.attack_recovery_timer = self.config['attack_recovery_time']
+        
+        # Update recovery timer
+        if self.is_in_recovery:
+            self.attack_recovery_timer -= dt
+            if self.attack_recovery_timer <= 0:
+                self.is_in_recovery = False
+                self.attack_recovery_timer = 0
+    
+    def _end_attack(self):
+        """End the current attack"""
+        current_time = pygame.time.get_ticks() / 1000.0
         self.is_attacking = False
-        self.attack_recovery_timer = self.config['attack_recovery_time']
-        self.is_in_recovery = True
-
-    def start_combo_end_cooldown(self):
-        """Start combo end cooldown"""
-        self.combo_end_cooldown_timer = self.config['combo_end_cooldown']
-
-    def reset_combo(self):
-        """Reset combo state"""
+        
+        # Set cooldown for next attack
+        if self.attack_combo >= 2:
+            self.next_attack_time = current_time + self.config['combo_end_cooldown']
+        else:
+            self.next_attack_time = current_time + self.config['attack_cooldown']
+        
+        # Reset combo state
+        self.can_combo = False
         self.attack_combo = 0
-        self.combo_window_timer = 0
-        self.combo_end_cooldown_timer = 0
-
+        
+        print("Attack ended")
+    
     def get_push_movement(self, dt):
-        """Get current attack push movement"""
-        if self.attack_push_timer > 0:
-            return self.attack_push_x * dt, self.attack_push_y * dt
-        return 0, 0
-
-    def reset(self):
-        """Reset combat system"""
-        self.is_attacking = False
-        self.attack_combo = 0
-        self.attack_duration_timer = 0
-        self.attack_cooldown_timer = 0
-        self.combo_window_timer = 0
-        self.combo_end_cooldown_timer = 0
-        self.attack_recovery_timer = 0
-        self.is_in_recovery = False
-        self.attack_push_x = 0
-        self.attack_push_y = 0
-        self.attack_push_timer = 0
+        """Get push movement vector for attack dash"""
+        if self.attack_push_timer <= 0:
+            return 0, 0
+        
+        push_speed = self.config['attack_push_speed']
+        progress = self.attack_push_timer / self.config['attack_push_duration']
+        current_push_speed = push_speed * progress
+        
+        push_x, push_y = 0, 0
+        if self.attack_direction == 'right':
+            push_x = current_push_speed * dt
+        elif self.attack_direction == 'left':
+            push_x = -current_push_speed * dt
+        elif self.attack_direction == 'down':
+            push_y = current_push_speed * dt
+        elif self.attack_direction == 'up':
+            push_y = -current_push_speed * dt
+        
+        return push_x, push_y
 
 # TESTING
 '''

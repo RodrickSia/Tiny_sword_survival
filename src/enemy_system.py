@@ -139,7 +139,7 @@ class Enemy(pygame.sprite.Sprite):
                 'health': 20,
                 'speed': 70,
                 'damage': 7,
-                'attack_range': 150,
+                'attack_range': 400,
                 'attack_cooldown': 2.0,
                 'sprite_path': os.path.join("assets", "Factions", "Knights", "Troops", "Archer", "Red", "Archer_Red.png"),
                 'sprite_width': 192,

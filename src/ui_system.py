@@ -167,14 +167,16 @@ class HUD:
             return
             
         # Draw health bar
+        bar_x = self.player_ref.rect.centerx - self.health_bar.width // 2
+        bar_y = self.player_ref.rect.top - 20
         health_x = 20
         health_y = 20
-        self.health_bar.draw(surface, self.player_ref.health_system, (health_x, health_y))
+        self.health_bar.draw(surface, self.player_ref.health_system, (bar_x, bar_y))
         
         # Draw health text
         health_text = f"Health: {self.player_ref.health_system.current_health}/{self.player_ref.health_system.max_health}"
         health_surface = self.font.render(health_text, True, self.text_color)
-        surface.blit(health_surface, (health_x, health_y + 25))
+        surface.blit(health_surface, (bar_x, bar_y + 25))
         
         # Draw power bar
         power_x = 20

@@ -5,8 +5,11 @@ from health_system import HealthSystem, HealthBar
 from power_system import PowerSystem
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, groups , pos=(400, 300), collision_sprites = None ):
+    def __init__(self, groups, pos=(400, 300), collision_sprites=None, audio_system=None):
         super().__init__(groups)
+        
+        # Store audio system reference
+        self.audio_system = audio_system
         
         # Configuration
         self.config = {
@@ -22,6 +25,10 @@ class Player(pygame.sprite.Sprite):
             'max_health': 100,
             'base_damage': 25
         }
+        
+        # Audio timing for footsteps
+        self.footstep_timer = 0.0
+        self.footstep_interval = 0.4  # Play footstep every x seconds
         
         # Initialize sprite system
         self._init_sprite_system()
@@ -41,7 +48,7 @@ class Player(pygame.sprite.Sprite):
         
         # Damage effect system
         self.damage_flash_timer = 0.0
-        self.damage_flash_duration = 0.3  # seconds
+        self.damage_flash_duration = 1.0  # 1 second of blinking
         self.damage_flash_alpha = 0
         self.is_flashing = False
         self.original_image = None
@@ -258,21 +265,17 @@ class Player(pygame.sprite.Sprite):
         # Update combat system timers
         self.combat_system.update_timers(dt)
         
-        # Update damage flash effect
-        self.update_damage_flash(dt)
-        
         # Handle input
         move_x, move_y = self.handle_input()
         
         # Apply movement
         self._apply_movement(dt, move_x, move_y)
         
-        # Update animation
+        # Update animation first
         self._update_animation(dt)
-
         
-
-       
+        # Apply damage flash effect after animation
+        self.update_damage_flash(dt)
 
     def _apply_movement(self, dt, move_x, move_y):
         """Apply movement calculations"""
@@ -281,6 +284,16 @@ class Player(pygame.sprite.Sprite):
         # Regular movement
         if self.is_moving and not self.combat_system.is_attacking:
             total_move_x, total_move_y = self._calculate_regular_movement(dt, move_x, move_y)
+            
+            # Play footstep sound when moving (not attacking)
+            self.footstep_timer += dt
+            if self.footstep_timer >= self.footstep_interval:
+                if self.audio_system:
+                    self.audio_system.play_sound('footstep', volume=0.3)
+                self.footstep_timer = 0.0
+        else:
+            # Reset footstep timer when not moving or attacking
+            self.footstep_timer = 0.0
         
         # Attack push movement
         push_x, push_y = self.combat_system.get_push_movement(dt)
@@ -329,24 +342,43 @@ class Player(pygame.sprite.Sprite):
         self.rect.y = int(self.pos_y)
         self.collision('vertical')
 
-
     def _update_animation(self, dt):
         """Update animation"""
-        self.image = self.animation_manager.update_animation(
+        # Get the base animation frame
+        base_image = self.animation_manager.update_animation(
             dt, self.combat_system.is_attacking, self.combat_system.attack_combo,
             self.is_moving, self.direction, self.last_horizontal_direction,
             self.combat_system.is_in_recovery
         )
+        
+        # Apply damage flash effect if active
+        if self.is_flashing:
+            # The damage flash effect will be applied in update_damage_flash
+            self.image = base_image
+        else:
+            # Normal animation
+            self.image = base_image
 
-    def take_damage(self, damage: int) -> bool:
-        """Take damage from enemies"""
+    def take_damage(self, damage: int):
+        """Take damage and trigger effects"""
+        # Use health_system instead of direct attributes
+        if self.health_system.is_invulnerable:
+            return False
+        
+        # Take damage through health system
         damage_taken = self.health_system.take_damage(damage)
         
-        # Start damage flash effect if damage was taken
-        if damage_taken:
-            self.start_damage_flash()
+        if damage_taken > 0:
+            self.start_damage_flash()  # Start blinking effect
             
-        return damage_taken
+            # Play hit sound effect
+            if self.audio_system:
+                self.audio_system.play_sound('player_hurt')
+        
+        # Check if player died
+        if not self.health_system.is_alive():
+            return True  # Player died
+        return False
 
     def heal(self, amount: int) -> bool:
         """Heal the player"""
@@ -457,40 +489,35 @@ class Player(pygame.sprite.Sprite):
         """Start the damage flash effect"""
         self.damage_flash_timer = self.damage_flash_duration
         self.is_flashing = True
-        self.original_image = self.image.copy()
 
     def update_damage_flash(self, dt):
-        """Update the damage flash effect"""
+        """Update the damage flash blinking effect"""
         if self.is_flashing:
             self.damage_flash_timer -= dt
-            
             if self.damage_flash_timer <= 0:
-                # End flash effect
                 self.is_flashing = False
-                self.damage_flash_alpha = 0
-                if self.original_image:
-                    self.image = self.original_image
+                # Reset damage flash state - let animation manager handle the image
+                self.original_image = None
             else:
-                # Update flash alpha based on remaining time
-                progress = self.damage_flash_timer / self.damage_flash_duration
-                # Create a pulsing effect (0.3 to 0.8 alpha)
-                self.damage_flash_alpha = 0.3 + 0.5 * (1.0 - progress)
-                self.apply_damage_flash()
-
-    def apply_damage_flash(self):
-        """Apply the red flash effect to the current image"""
-        if self.original_image is None:
-            self.original_image = self.image.copy()
-        
-        # Create a copy of the current image
-        flash_image = self.image.copy()
-        
-        # Create a red overlay
-        red_overlay = pygame.Surface(flash_image.get_size(), pygame.SRCALPHA)
-        red_overlay.fill((255, 0, 0, int(255 * self.damage_flash_alpha)))
-        
-        # Apply the red overlay
-        flash_image.blit(red_overlay, (0, 0))
-        
-        # Update the image
-        self.image = flash_image
+                # Create blinking effect - very fast and noticeable
+                blink_interval = 0.08  # 0.08 seconds per blink phase
+                current_time = self.damage_flash_duration - self.damage_flash_timer
+                blink_cycle = int(current_time / blink_interval) % 2
+                
+                # Apply effect to current animation frame
+                if blink_cycle == 0:
+                    # Completely invisible phase for dramatic effect
+                    if self.image:
+                        temp_image = self.image.copy()
+                        temp_image.set_alpha(0)
+                        self.image = temp_image
+                else:
+                    # Fully visible with red tint phase
+                    if self.image:
+                        temp_image = self.image.copy()
+                        temp_image.set_alpha(255)
+                        # Add red overlay for hurt effect
+                        red_overlay = pygame.Surface(temp_image.get_size(), pygame.SRCALPHA)
+                        red_overlay.fill((255, 50, 50, 120))  # Red tint
+                        temp_image.blit(red_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
+                        self.image = temp_image
