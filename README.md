@@ -122,4 +122,3 @@ The game is built with a modular architecture:
 - Multiplayer support
 - More power-up types
 - Achievement system 
->>>>>>> master
